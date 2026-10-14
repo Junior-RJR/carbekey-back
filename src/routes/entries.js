@@ -17,6 +17,8 @@ const entrySchema = z.object({
 
 const listSchema = z.object({
   groupId: z.string().uuid().optional(),
+  // Por padrão, filtrar por grupo traz também as senhas dos subgrupos
+  includeSubgroups: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   search: z.string().trim().max(200).optional(),
 });
 
@@ -40,12 +42,20 @@ async function assertGroupOwner(groupId, userId) {
 }
 
 router.get('/', asyncHandler(async (req, res) => {
-  const { groupId, search } = parse(listSchema, req.query);
+  const { groupId, includeSubgroups, search } = parse(listSchema, req.query);
   const params = [req.userId];
   let where = 'user_id = $1';
   if (groupId) {
     params.push(groupId);
-    where += ` AND group_id = $${params.length}`;
+    const p = `$${params.length}`;
+    where += includeSubgroups
+      ? ` AND group_id IN (
+            WITH RECURSIVE tree AS (
+              SELECT id FROM groups WHERE id = ${p} AND user_id = $1
+              UNION ALL
+              SELECT g.id FROM groups g JOIN tree t ON g.parent_id = t.id
+            ) SELECT id FROM tree)`
+      : ` AND group_id = ${p}`;
   }
   if (search) {
     params.push(`%${search.replace(/[\\%_]/g, '\\$&')}%`);

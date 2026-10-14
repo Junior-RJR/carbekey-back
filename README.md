@@ -38,16 +38,18 @@ Todas recebem e devolvem JSON. Fora `/health` e `/auth/register|login`, todas ex
 
 | Método | Rota | Corpo | Resposta |
 | --- | --- | --- | --- |
-| GET | `/groups` | | `[{ id, name, entryCount, createdAt }]` |
-| POST | `/groups` | `{ name }` | `201 { id, name, ... }` |
-| PUT | `/groups/:id` | `{ name }` | grupo atualizado |
-| DELETE | `/groups/:id` | | `204` (as senhas do grupo ficam sem grupo) |
+| GET | `/groups` | | `[{ id, name, parentId, entryCount, createdAt }]` |
+| POST | `/groups` | `{ name, parentId? }` | `201` grupo criado (`parentId` cria um subgrupo) |
+| PUT | `/groups/:id` | `{ name?, parentId? }` | grupo atualizado (mandar `parentId` move o grupo) |
+| DELETE | `/groups/:id` | | `204` (senhas e subgrupos sobem para o grupo de cima) |
+
+Subgrupos podem ter qualquer profundidade (ex.: Carbe › Gabi Semi Joias). `entryCount` conta só as senhas diretamente no grupo.
 
 ### Senhas
 
 | Método | Rota | Corpo | Resposta |
 | --- | --- | --- | --- |
-| GET | `/entries?groupId=&search=` | | lista **sem** o campo `password` |
+| GET | `/entries?groupId=&search=&includeSubgroups=` | | lista **sem** o campo `password` (com `groupId`, inclui os subgrupos, a menos que `includeSubgroups=false`) |
 | GET | `/entries/:id` | | senha completa, **com** `password` |
 | POST | `/entries` | `{ name, username?, password, site?, description?, groupId? }` | `201` senha criada |
 | PUT | `/entries/:id` | mesmo corpo do POST | senha atualizada |

@@ -107,3 +107,34 @@ test('um usuário não vê as senhas de outro', async () => {
   const res = await api.post('/entries').set(otherAuth).send({ name: 'X', password: 'x', groupId: myGroup.id });
   assert.equal(res.status, 400);
 });
+
+test('subgrupos: criar, listar senhas, mover e excluir', async () => {
+  const carbe = (await api.get('/groups').set(auth())).body.find((g) => g.name === 'Carbe');
+  const semi = await api.post('/groups').set(auth()).send({ name: 'Gabi Semi Joias', parentId: carbe.id });
+  assert.equal(semi.status, 201);
+  assert.equal(semi.body.parentId, carbe.id);
+
+  // mesmo nome pode existir em outro nível, mas não no mesmo
+  assert.equal((await api.post('/groups').set(auth()).send({ name: 'Gabi Semi Joias' })).status, 201);
+  assert.equal((await api.post('/groups').set(auth()).send({ name: 'Gabi Semi Joias', parentId: carbe.id })).status, 409);
+
+  const loja = (await api.post('/entries').set(auth()).send({ name: 'Nuvemshop', password: 'x', groupId: semi.body.id })).body;
+
+  const withSubs = await api.get('/entries').set(auth()).query({ groupId: carbe.id });
+  assert.ok(withSubs.body.some((e) => e.id === loja.id));
+  const direct = await api.get('/entries').set(auth()).query({ groupId: carbe.id, includeSubgroups: 'false' });
+  assert.ok(!direct.body.some((e) => e.id === loja.id));
+
+  // não pode mover um grupo para dentro do próprio subgrupo
+  assert.equal((await api.put(`/groups/${carbe.id}`).set(auth()).send({ parentId: semi.body.id })).status, 400);
+  // renomear sem mandar parentId mantém o grupo no lugar
+  const renamed = await api.put(`/groups/${semi.body.id}`).set(auth()).send({ name: 'Gabi Semi Joias Ltda' });
+  assert.equal(renamed.body.parentId, carbe.id);
+
+  const neto = (await api.post('/groups').set(auth()).send({ name: 'Instagram', parentId: semi.body.id })).body;
+  assert.equal((await api.delete(`/groups/${semi.body.id}`).set(auth())).status, 204);
+
+  assert.equal((await api.get(`/entries/${loja.id}`).set(auth())).body.groupId, carbe.id);
+  const groups = (await api.get('/groups').set(auth())).body;
+  assert.equal(groups.find((g) => g.id === neto.id).parentId, carbe.id);
+});
